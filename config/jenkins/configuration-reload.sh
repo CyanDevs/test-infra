@@ -31,7 +31,7 @@ git fetch
 LOCAL=$(git rev-parse ${BRANCH})
 REMOTE=$(git rev-parse origin/${BRANCH})
 
-if ! git diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
+if git diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
     git pull
     if [[ -d ${JENKINS_HOME}/configuration_old ]]; then
         rm -rf ${JENKINS_HOME}/configuration_old
