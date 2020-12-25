@@ -54,6 +54,8 @@ jenkins:
 
     Config is now mostly handled by the 'Jenkins Configuration as Code' (JCasC) plugin.
     JCasC config can be found in the jenkins.yaml file in the $JENKINS_HOME/configuration folder.
+
+    test
   updateCenter:
     sites:
     - id: "default"

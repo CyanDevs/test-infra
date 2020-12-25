@@ -120,248 +120,263 @@ readonly BASEDIR=$(dirname "$0")
 
 deploy_aks () {
 
-  az account set --subscription ${AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}
+    az account set --subscription ${AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}
 
-  # Create a service principal
-  AKS_SP_ID=$(az ad sp create-for-rbac --name http://${AKS_CLUSTER_NAME}-sp --query appId | sed 's/"//g')
-  echo ${AKS_SP_ID}
+    # Create a service principal
+    AKS_SP_ID=$(az ad sp create-for-rbac --name http://${AKS_CLUSTER_NAME}-sp --query appId | sed 's/"//g')
+    echo ${AKS_SP_ID}
 
-  # Retrieve service principal secret
-  AKS_SP_SECRET=$(az ad sp credential reset --name http://${AKS_CLUSTER_NAME}-sp --query password | sed 's/"//g')
-  echo ${AKS_SP_SECRET}
-  
-  # Delete resource group if exists
-  if [[ $(az group show --name ${AZURE_RESOURCE_GROUP}) ]]; then
-    read -p "Resource group "${AZURE_RESOURCE_GROUP}" exists. Are you ready to delete it and recreate? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      az group delete --name ${AZURE_RESOURCE_GROUP} --yes
-    else
-      echo "[Error] Please start with a new resource group, or be ready to delete the existing resource group."
-      exit 1
+    # Retrieve service principal secret
+    AKS_SP_SECRET=$(az ad sp credential reset --name http://${AKS_CLUSTER_NAME}-sp --query password | sed 's/"//g')
+    echo ${AKS_SP_SECRET}
+    
+    # Delete resource group if exists
+    if [[ $(az group show --name ${AZURE_RESOURCE_GROUP}) ]]; then
+        read -p "Resource group "${AZURE_RESOURCE_GROUP}" exists. Are you ready to delete it and recreate? (y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            az group delete --name ${AZURE_RESOURCE_GROUP} --yes
+        else
+            echo "[Error] Please start with a new resource group, or be ready to delete the existing resource group."
+            exit 1
+        fi
     fi
-  fi
 
-  # Create resource group
-  az group create --location ${AZURE_LOCATION} --name ${AZURE_RESOURCE_GROUP}
+    # Create resource group
+    az group create --location ${AZURE_LOCATION} --name ${AZURE_RESOURCE_GROUP}
 
-  # Create AKS Cluster
-  az aks create \
-    --resource-group ${AZURE_RESOURCE_GROUP} \
-    --name ${AKS_CLUSTER_NAME} \
-    --service-principal ${AKS_SP_ID} \
-    --client-secret ${AKS_SP_SECRET} \
-    --node-vm-size ${AKS_NODE_SIZE} \
-    --vm-set-type VirtualMachineScaleSets \
-    --load-balancer-sku standard \
-    --location ${AZURE_LOCATION} \
-    --enable-cluster-autoscaler \
-    --min-count ${AKS_MIN_NODE_COUNT} \
-    --max-count ${AKS_MAX_NODE_COUNT} \
-    --no-ssh-key \
-    --kubernetes-version ${AKS_KUBERNETES_VERSION}
+    # Create AKS Cluster
+    az aks create \
+        --resource-group ${AZURE_RESOURCE_GROUP} \
+        --name ${AKS_CLUSTER_NAME} \
+        --service-principal ${AKS_SP_ID} \
+        --client-secret ${AKS_SP_SECRET} \
+        --node-vm-size ${AKS_NODE_SIZE} \
+        --vm-set-type VirtualMachineScaleSets \
+        --load-balancer-sku standard \
+        --location ${AZURE_LOCATION} \
+        --enable-cluster-autoscaler \
+        --min-count ${AKS_MIN_NODE_COUNT} \
+        --max-count ${AKS_MAX_NODE_COUNT} \
+        --no-ssh-key \
+        --kubernetes-version ${AKS_KUBERNETES_VERSION}
 
-  # Get AKS Credentials
-  az aks get-credentials --resource-group ${AZURE_RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --overwrite-existing
+    # Get AKS Credentials
+    az aks get-credentials --resource-group ${AZURE_RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --overwrite-existing
 }
 
 
 deploy_jenkins_ingress () {
 
-  # Apply Ingress configuration
-  sed -i "s/<LETSENCRYPT_EMAIL>/${LETSENCRYPT_EMAIL}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
-  sed -i "s/<DNS_LABEL>/${DNS_LABEL}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
-  sed -i "s/<AZURE_LOCATION>/${AZURE_LOCATION}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    # Apply Ingress configuration
+    sed -i "s/<LETSENCRYPT_EMAIL>/${LETSENCRYPT_EMAIL}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    sed -i "s/<DNS_LABEL>/${DNS_LABEL}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    sed -i "s/<AZURE_LOCATION>/${AZURE_LOCATION}/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
 
-  # Create a namespace for your ingress resource
-  if ! kubectl get namespace ingress; then
-    kubectl create namespace ingress
-  fi
+    # Create a namespace for your ingress resource
+    if ! kubectl get namespace ingress; then
+        kubectl create namespace ingress
+    fi
 
-  # Add the official stable and ingress-nginx repos
-  helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-  helm repo add stable https://charts.helm.sh/stable
-  helm repo update
+    # Add the official stable and ingress-nginx repos
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    helm repo add stable https://charts.helm.sh/stable
+    helm repo update
 
-  # Get AKS Resource Group Name
-  readonly AKS_RESOURCE_GROUP=$(az aks show --resource-group ${AZURE_RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --query nodeResourceGroup -o tsv)
+    # Get AKS Resource Group Name
+    readonly AKS_RESOURCE_GROUP=$(az aks show --resource-group ${AZURE_RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --query nodeResourceGroup -o tsv)
 
-  # Assign Static IP
-  readonly STATIC_IP=$(az network public-ip create --resource-group ${AKS_RESOURCE_GROUP} --name ${AKS_PUBLIC_IP_NAME} --sku Standard --allocation-method static --query publicIp.ipAddress -o tsv --dns-name ${DNS_LABEL})
+    # Assign Static IP
+    readonly STATIC_IP=$(az network public-ip create --resource-group ${AKS_RESOURCE_GROUP} --name ${AKS_PUBLIC_IP_NAME} --sku Standard --allocation-method static --query publicIp.ipAddress -o tsv --dns-name ${DNS_LABEL})
 
-  # Use Helm to deploy an NGINX ingress controller
-  # Possible parameters reference: https://github.com/kubernetes/ingress-nginx/blob/master/charts/ingress-nginx/values.yaml
-  # Node labels for controller and backend pod assignment
-  # Ref: https://kubernetes.io/docs/user-guide/node-selection/
-  helm install nginx ingress-nginx/ingress-nginx \
-      --namespace ingress \
-      --set controller.replicaCount=2 \
-      --set controller.service.loadBalancerIP="${STATIC_IP}" \
-      --set controller.nodeSelector."beta\.kubernetes\.io/os"=linux \
-      --set defaultBackend.nodeSelector."beta\.kubernetes\.io/os"=linux
+    # Use Helm to deploy an NGINX ingress controller
+    # Possible parameters reference: https://github.com/kubernetes/ingress-nginx/blob/master/charts/ingress-nginx/values.yaml
+    # Node labels for controller and backend pod assignment
+    # Ref: https://kubernetes.io/docs/user-guide/node-selection/
+    helm install nginx ingress-nginx/ingress-nginx \
+            --namespace ingress \
+            --set controller.replicaCount=2 \
+            --set controller.service.loadBalancerIP="${STATIC_IP}" \
+            --set controller.nodeSelector."beta\.kubernetes\.io/os"=linux \
+            --set defaultBackend.nodeSelector."beta\.kubernetes\.io/os"=linux
 
-  # Label the cert-manager namespace to disable resource validation
-  kubectl label namespace ingress cert-manager.io/disable-validation=true
+    # Label the cert-manager namespace to disable resource validation
+    kubectl label namespace ingress cert-manager.io/disable-validation=true
 
-  # Add the Jetstack Helm repository
-  helm repo add jetstack https://charts.jetstack.io
-  helm repo update
+    # Add the Jetstack Helm repository
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
 
-  # Install the cert-manager Helm chart
-  helm install \
-    cert-manager \
-    --namespace ingress \
-    --version v1.1.0 \
-    --set installCRDs=true \
-    --set nodeSelector."beta\.kubernetes\.io/os"=linux \
-    jetstack/cert-manager
+    # Install the cert-manager Helm chart
+    helm install \
+        cert-manager \
+        --namespace ingress \
+        --version v1.1.0 \
+        --set installCRDs=true \
+        --set nodeSelector."beta\.kubernetes\.io/os"=linux \
+        jetstack/cert-manager
 
-  kubectl wait --for=condition=ready pod -l app=webhook --timeout=2m -n ingress
+    kubectl wait --for=condition=ready pod -l app=webhook --timeout=2m -n ingress
 
-  # Needs to retry several times due to webhook api not being ready to process requests
-  while ! kubectl apply -f ${BASEDIR}/kubernetes/jenkins-ingress.yml; do
-    kubectl delete -f ${BASEDIR}/kubernetes/jenkins-ingress.yml || true
-    sleep 10
-  done
+    # Needs to retry several times due to webhook api not being ready to process requests
+    while ! kubectl apply -f ${BASEDIR}/kubernetes/jenkins-ingress.yml; do
+        kubectl delete -f ${BASEDIR}/kubernetes/jenkins-ingress.yml || true
+        sleep 10
+    done
 
-  # Clean up configuration locally in case anything changes in subsequent runs.
-  sed -i "s/${LETSENCRYPT_EMAIL}/<LETSENCRYPT_EMAIL>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
-  sed -i "s/${DNS_LABEL}/<DNS_LABEL>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
-  sed -i "s/${AZURE_LOCATION}/<AZURE_LOCATION>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    # Clean up configuration locally in case anything changes in subsequent runs.
+    sed -i "s/${LETSENCRYPT_EMAIL}/<LETSENCRYPT_EMAIL>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    sed -i "s/${DNS_LABEL}/<DNS_LABEL>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
+    sed -i "s/${AZURE_LOCATION}/<AZURE_LOCATION>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
 }
 
 
 deploy_jenkins () {
 
-  # Add jenkinsadmin password
-  if  ! kubectl get secret jenkinsadmin; then
-    kubectl create secret generic jenkinsadmin --from-literal=password="${JENKINSADMIN_PASSWORD}"
-  fi
+    # Apply passwords
+    if  ! kubectl get secret passwords; then
+        kubectl create secret generic passwords \
+         --from-literal=jenkinsadmin="${JENKINSADMIN_PASSWORD}" \
+         --from-literal=oeadmin="${OEADMIN_PASSWORD}" \
+         --from-literal=remotetrigger="${JENKINS_REMOTE_TRIGGER_TOKEN}"
+    fi
 
-  # Add oeadmin password
-  if ! kubectl get secret oeadmin; then
-    kubectl create secret generic oeadmin --from-literal=password="${OEADMIN_PASSWORD}"
-  fi
+    # Apply Key Vault Service Principal
+    if ! kubectl get secret jenkinssp; then
+        # Set secret. If it fails to change the SP, make sure it exists and you have permissions to manage it.
+        az ad sp credential reset --name "${AZURE_SERVICE_PRINCIPAL_NAME}" --password "${AZURE_SERVICE_PRINCIPAL_SECRET}"
+        kubectl create secret generic jenkinssp \
+            --from-literal=clientid="${AZURE_SERVICE_PRINCIPAL_CLIENT_ID}" \
+            --from-literal=subscriptionid="${AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}" \
+            --from-literal=tenantid="${AZURE_SERVICE_PRINCIPAL_TENANT_ID}" \
+            --from-literal=secret="${AZURE_SERVICE_PRINCIPAL_SECRET}"
+    fi
 
-  # Add Jenkins remote trigger token for all jobs
-  if ! kubectl get secret jenkinsremotetrigger; then
-    kubectl create secret generic jenkinsremotetrigger --from-literal=password="${JENKINS_REMOTE_TRIGGER_TOKEN}"
-  fi
+    # Apply configurations for VM Agents Plugin
+    if kubectl get secret cloudconfig; then
+        kubectl delete secret cloudconfig
+    fi
+    kubectl create secret generic cloudconfig \
+        --from-literal=resourcegroup="${AZURE_VM_RESOURCE_GROUP}" \
+        --from-literal=location="${AZURE_VM_LOCATION}" \
+        --from-literal=galleryname="${AZURE_VM_GALLERY_NAME}" \
+        --from-literal=galleryresourcegroup="${AZURE_VM_GALLERY_RESOURCE_GROUP}" \
+        --from-literal=gallerysubscriptionid="${AZURE_VM_GALLERY_SUBSCRIPTION_ID}"
 
-  # Apply Key Vault Service Principal within pod
-  if ! kubectl get secret jenkinssp; then
-    # Set secret. If it fails to change the SP, make sure it exists and you have permissions to manage it.
-    az ad sp credential reset --name "${AZURE_SERVICE_PRINCIPAL_NAME}" --password "${AZURE_SERVICE_PRINCIPAL_SECRET}"
-    kubectl create secret generic jenkinssp \
-      --from-literal=clientid="${AZURE_SERVICE_PRINCIPAL_CLIENT_ID}" \
-      --from-literal=subscriptionid="${AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}" \
-      --from-literal=tenantid="${AZURE_SERVICE_PRINCIPAL_TENANT_ID}" \
-      --from-literal=secret="${AZURE_SERVICE_PRINCIPAL_SECRET}"
-  fi
+    # Apply configurations for Jenkins Master
+    if kubectl get secret jenkinsconfig; then
+        kubectl delete secret jenkinsconfig
+    fi
+    kubectl create secret generic jenkinsconfig \
+        --from-literal=jenkinsadmin.email="${JENKINSADMIN_EMAIL}" \
+        --from-literal=dnslabel="${DNS_LABEL}" \
+        --from-literal=keyvaulturl="${AZURE_KEYVAULT_URL}" \
+        --from-literal=location="${AZURE_LOCATION}"
 
-  # Deploy jenkins-master
-  kubectl apply -f ${BASEDIR}/kubernetes/jenkins-master-deployment.yml
-  sleep 3
+    # Deploy jenkins-master
+    kubectl apply -f ${BASEDIR}/kubernetes/jenkins-master-deployment.yml
+    sleep 3
 
-  # Get Jenkins Master Pod ID
-  readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
+    # Get Jenkins Master Pod ID
+    readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
 
-  # Wait for pod to be ready to accept commands
-  sleep 5
-  kubectl wait --for=condition=available deployment/jenkins-master --timeout=15m
+    # Wait for pod to be ready to accept commands
+    sleep 5
+    kubectl wait --for=condition=available deployment/jenkins-master --timeout=15m
 
-  # Apply workaround for https://github.com/jenkinsci/docker/issues/399
-  kubectl exec ${JENKINS_MASTER_POD} -- ln -fs /dev/null ${JENKINS_HOME}/.owners
+    # Apply workaround for https://github.com/jenkinsci/docker/issues/399
+    kubectl exec ${JENKINS_MASTER_POD} -- ln -fs /dev/null ${JENKINS_HOME}/.owners
 }
 
 
 configure_jenkins () {
 
-  if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
-    readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
-  fi
+    if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
+        readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
+    fi
 
-  # Copy in Jenkins configuration to Jenkins master
-  kubectl exec ${JENKINS_MASTER_POD} -- rm -rf ${JENKINS_HOME}/configuration
-  kubectl cp configuration ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration
-
-  # Apply general configurations
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<AZURE_KEYVAULT_URL>@${AZURE_KEYVAULT_URL}@" ${JENKINS_HOME}/configuration/jenkins.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<DNS_LABAEL>/${DNS_LABEL}/" ${JENKINS_HOME}/configuration/jenkins.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_LOCATION>/${AZURE_LOCATION}/" ${JENKINS_HOME}/configuration/jenkins.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_RESOURCE_GROUP>/${AZURE_VM_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_LOCATION>/${AZURE_VM_LOCATION}/" ${JENKINS_HOME}/configuration/clouds.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_NAME>/${AZURE_VM_GALLERY_NAME}/" ${JENKINS_HOME}/configuration/clouds.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_RESOURCE_GROUP>/${AZURE_VM_GALLERY_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
-  kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_SUBSCRIPTION_ID>/${AZURE_VM_GALLERY_SUBSCRIPTION_ID}/" ${JENKINS_HOME}/configuration/clouds.yml
-  
-  # Apply secrets within pod
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<JENKINSADMIN_PASSWORD>/${SECRET_JENKINSADMIN_PASSWORD}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<OEADMIN_PASSWORD>/${SECRET_OEADMIN_PASSWORD}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_CLIENT_ID>/${SECRET_AZURE_SERVICE_PRINCIPAL_CLIENT_ID}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SUBSCRIPTION_ID>/${SECRET_AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_TENANT_ID>/${SECRET_AZURE_SERVICE_PRINCIPAL_TENANT_ID}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SECRET>/${SECRET_AZURE_SERVICE_PRINCIPAL_SECRET}/" ${JENKINS_HOME}/configuration/jenkins.yml'
-  kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'find ${JENKINS_HOME}/configuration/jobs -type f -name "*.yml" -exec sed -i "s/<JENKINS_REMOTE_TRIGGER_TOKEN>/${SECRET_JENKINS_REMOTE_TRIGGER_TOKEN}/" {} +'
+    # Copy in Jenkins configuration to Jenkins master
+    kubectl exec ${JENKINS_MASTER_POD} -- rm -rf ${JENKINS_HOME}/configuration
+    kubectl cp ${BASEDIR}/configuration-reload.sh ${JENKINS_MASTER_POD}:/var/jenkins_home/configuration-reload.sh
+    kubectl cp configuration ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<JENKINS_HOME>@${JENKINS_HOME}@" ${JENKINS_HOME}/configuration-reload.sh
+    kubectl exec ${JENKINS_MASTER_POD} -- chmod 755 ${JENKINS_HOME}/configuration-reload.sh
+    
+    # Apply first time configurations
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<AZURE_KEYVAULT_URL>@${AZURE_KEYVAULT_URL}@" ${JENKINS_HOME}/configuration/jenkins.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<DNS_LABAEL>/${DNS_LABEL}/" ${JENKINS_HOME}/configuration/jenkins.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_LOCATION>/${AZURE_LOCATION}/" ${JENKINS_HOME}/configuration/jenkins.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_RESOURCE_GROUP>/${AZURE_VM_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_LOCATION>/${AZURE_VM_LOCATION}/" ${JENKINS_HOME}/configuration/clouds.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_NAME>/${AZURE_VM_GALLERY_NAME}/" ${JENKINS_HOME}/configuration/clouds.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_RESOURCE_GROUP>/${AZURE_VM_GALLERY_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_SUBSCRIPTION_ID>/${AZURE_VM_GALLERY_SUBSCRIPTION_ID}/" ${JENKINS_HOME}/configuration/clouds.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<JENKINSADMIN_PASSWORD>/'"${SECRET_JENKINSADMIN_PASSWORD}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<OEADMIN_PASSWORD>/'"${SECRET_OEADMIN_PASSWORD}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_CLIENT_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_CLIENT_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SUBSCRIPTION_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_TENANT_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_TENANT_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SECRET>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_SECRET}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
+    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'find ${JENKINS_HOME}/configuration/jobs -type f -name "*.yml" -exec sed -i "s/<JENKINS_REMOTE_TRIGGER_TOKEN>/'"${SECRET_JENKINS_REMOTE_TRIGGER_TOKEN}"'/" {} +'
 }
 
 
 install_jenkins_plugins () {
 
-  if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
-    readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
-  fi
+    if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
+        readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
+    fi
 
-  # Copy plugins list and install
-  kubectl cp plugins.txt ${JENKINS_MASTER_POD}:${JENKINS_HOME}
-  kubectl exec ${JENKINS_MASTER_POD} -- jenkins-plugin-cli --plugin-file ${JENKINS_HOME}/plugins.txt --plugin-download-directory ${JENKINS_HOME}/plugins/
+    # Copy plugins list and install
+    kubectl cp plugins.txt ${JENKINS_MASTER_POD}:${JENKINS_HOME}
+    kubectl exec ${JENKINS_MASTER_POD} -- jenkins-plugin-cli --plugin-file ${JENKINS_HOME}/plugins.txt --plugin-download-directory ${JENKINS_HOME}/plugins/
 
-  read -p "Plugins installed. Do you want to automatically do a rolling restart of Jenkins to apply the changes? (y/n): " -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # This creates a new pod and terminates the currently running pod, so plugins are reloaded.
-    echo "Waiting for first pod to be ready to avoid conflicts..."
-    kubectl wait --for=condition=ready pod -l app=jenkins-master --timeout=30m
-    kubectl patch deployment jenkins-master -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"$(date +%s)\"}}}}}"
-  fi
+    read -p "Plugins installed. Do you want to automatically do a rolling restart of Jenkins to apply the changes? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # This creates a new pod and terminates the currently running pod, so plugins are reloaded.
+        echo "Waiting for first pod to be ready to avoid conflicts..."
+        kubectl wait --for=condition=ready pod -l app=jenkins-master --timeout=30m
+        kubectl patch deployment jenkins-master -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"$(date +%s)\"}}}}}"
+    fi
 }
 
 print_info () {
 
-  # Determine FQDN
-  readonly JENKINS_FQDN=$(az network public-ip list --resource-group ${AKS_RESOURCE_GROUP} --query "[?name=='${AKS_PUBLIC_IP_NAME}'].[dnsSettings.fqdn]" -o tsv)
+    # Determine FQDN
+    readonly JENKINS_FQDN=$(az network public-ip list --resource-group ${AKS_RESOURCE_GROUP} --query "[?name=='${AKS_PUBLIC_IP_NAME}'].[dnsSettings.fqdn]" -o tsv)
 
-  echo "
-  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-  Please store this somewhere secure for your records.
-  URL: https://${JENKINS_FQDN}
-  Jenkins Admin User: jenkinsadmin
-  Password: ${JENKINSADMIN_PASSWORD}
-  To recover the password, use:
-  kubectl get secret jenkinsadmin -o jsonpath='{.data.password}' | base64 --decode
-  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+    echo "
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    Please store this somewhere secure for your records.
+    URL: https://${JENKINS_FQDN}
+    Jenkins Admin User: jenkinsadmin
+    Password: ${JENKINSADMIN_PASSWORD}
+    To recover the password, use:
+    kubectl get secret jenkinsadmin -o jsonpath='{.data.password}' | base64 --decode
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 }
 
 # Main -----------------------------------
 
 while getopts ":pc" opt; do
-  case ${opt} in
-    c ) echo "Skipping installation and updating jenkins-master configuration only..."
-        configure_jenkins
-        echo "Configuration completed. Please reload Jenkins through Manage Jenkins > Configuration as Code"
-        exit 0
-        ;;
-    p ) echo "Installing Jenkins plugins..."
-        install_jenkins_plugins
-        exit 0
-        ;;
-    * ) echo "Usage: deploy_jenkins.sh [-c] [-p]
-        [-c] skips installation and applies configuration to an existing installation.
-        [-p] installs Jenkins plugins only"
-        exit 1
-        ;;
-  esac
+    case ${opt} in
+        c ) echo "Skipping installation and updating jenkins-master configuration only..."
+            configure_jenkins
+            echo "Configuration completed. Please reload Jenkins through Manage Jenkins > Configuration as Code"
+            exit 0
+            ;;
+        p ) echo "Installing Jenkins plugins..."
+            install_jenkins_plugins
+            exit 0
+            ;;
+        * ) echo "Usage: deploy_jenkins.sh [-c] [-p]
+            [-c] skips installation and applies configuration to an existing installation.
+            [-p] installs Jenkins plugins only"
+            exit 1
+            ;;
+    esac
 done
 
 echo "Performing full install..."

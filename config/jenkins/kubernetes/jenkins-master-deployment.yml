@@ -69,41 +69,6 @@ spec:
           value: -Djenkins.install.runSetupWizard=false
         - name: CASC_JENKINS_CONFIG
           value: /var/jenkins_home/configuration/
-        - name: SECRET_JENKINSADMIN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: jenkinsadmin
-              key: password
-        - name: SECRET_OEADMIN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: oeadmin
-              key: password
-        - name: SECRET_JENKINS_REMOTE_TRIGGER_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: jenkinsremotetrigger
-              key: password
-        - name: SECRET_AZURE_SERVICE_PRINCIPAL_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: jenkinssp
-              key: clientid
-        - name: SECRET_AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID
-          valueFrom:
-            secretKeyRef:
-              name: jenkinssp
-              key: subscriptionid
-        - name: SECRET_AZURE_SERVICE_PRINCIPAL_TENANT_ID
-          valueFrom:
-            secretKeyRef:
-              name: jenkinssp
-              key: tenantid
-        - name: SECRET_AZURE_SERVICE_PRINCIPAL_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: jenkinssp
-              key: secret
         volumeMounts:
         - name: volume
           mountPath: "/var/jenkins_home"

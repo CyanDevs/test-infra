@@ -1,0 +1,141 @@
+---
+# Service account the client will use to reset the deployment,
+# by default the pods running inside the cluster can do no such things.
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: configuration-update
+---
+# allow getting status and patching only the one deployment you want to restart
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: configuration-update
+rules:
+  - apiGroups: ["apps", "extensions"]
+    resources: ["deployments"]
+    resourceNames: ["deployments/jenkins-master"]
+    verbs: ["get", "patch"]
+---
+# bind the role to the service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: configuration-update
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: configuration-update
+subjects:
+  - kind: ServiceAccount
+    name: configuration-update
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: configuration-update
+spec:
+  concurrencyPolicy: Forbid
+  schedule: '*/5 * * * *'
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          serviceAccountName: configuration-update
+          restartPolicy: Never
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl
+              command:
+                - '/bin/bash'
+                - '/var/jenkins_home/configuration-reload.sh'
+              volumeMounts:
+              - name: volume
+                mountPath: "/var/jenkins_home"
+              env:
+              - name: JENKINSADMIN_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: passwords
+                    key: jenkinsadmin
+              - name: OEADMIN_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: passwords
+                    key: oeadmin
+              - name: JENKINS_REMOTE_TRIGGER_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: passwords
+                    key: remotetrigger
+              - name: AZURE_SERVICE_PRINCIPAL_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinssp
+                    key: clientid
+              - name: AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinssp
+                    key: subscriptionid
+              - name: AZURE_SERVICE_PRINCIPAL_TENANT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinssp
+                    key: tenantid
+              - name: AZURE_SERVICE_PRINCIPAL_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinssp
+                    key: secret
+              - name: AZURE_VM_RESOURCE_GROUP
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudconfig
+                    key: resourcegroup
+              - name: AZURE_VM_LOCATION
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudconfig
+                    key: location
+              - name: AZURE_VM_GALLERY_NAME
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudconfig
+                    key: galleryname
+              - name: AZURE_VM_GALLERY_RESOURCE_GROUP
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudconfig
+                    key: galleryresourcegroup
+              - name: AZURE_VM_GALLERY_SUBSCRIPTION_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: cloudconfig
+                    key: gallerysubscriptionid
+              - name: JENKINSADMIN_EMAIL
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinsconfig
+                    key: jenkinsadmin.email
+              - name: DNS_LABEL
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinsconfig
+                    key: dnslabel
+              - name: AZURE_KEYVAULT_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinsconfig
+                    key: keyvaulturl
+              - name: AZURE_LOCATION
+                valueFrom:
+                  secretKeyRef:
+                    name: jenkinsconfig
+                    key: location
+          volumes:
+          - name: volume
+            persistentVolumeClaim:
+              claimName: jenkins-master-volume
