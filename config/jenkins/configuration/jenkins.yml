@@ -55,7 +55,7 @@ jenkins:
     Config is now mostly handled by the 'Jenkins Configuration as Code' (JCasC) plugin.
     JCasC config can be found in the jenkins.yaml file in the $JENKINS_HOME/configuration folder.
 
-    test
+    Jenkins is currently on commit: <GIT_COMMIT>
   updateCenter:
     sites:
     - id: "default"

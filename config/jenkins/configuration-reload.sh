@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 set -e
+set +x
 
 JENKINS_HOME=<JENKINS_HOME>
+BRANCH="jenkins-test"
 # List of secrets created by Kubernetes
 CONFIGSECRETS="passwords jenkinssp cloudconfig jenkinsconfig"
 
@@ -13,9 +15,11 @@ if [[ ! -d ${JENKINS_HOME}/test-infra ]]; then
         --depth 1 \
         --filter=blob:none \
         --no-checkout \
+        --single-branch \
+        --branch ${BRANCH} \
         https://github.com/cyandevs/test-infra
     cd ${JENKINS_HOME}/test-infra
-    git checkout jenkins-test -- config/jenkins
+    git checkout ${BRANCH} -- config/jenkins
     exit 0
 fi
 
@@ -24,11 +28,10 @@ cd ${JENKINS_HOME}/test-infra
 git fetch
 
 # Determine if changes occurred
-LOCAL=$(git rev-parse master)
-REMOTE=$(git rev-parse origin/master)
-FILES=$(git diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml")
+LOCAL=$(git rev-parse ${BRANCH})
+REMOTE=$(git rev-parse origin/${BRANCH})
 
-if [[ ! -z ${FILES+x} ]]; then
+if ! git diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
     git pull
     if [[ -d ${JENKINS_HOME}/configuration_old ]]; then
         rm -rf ${JENKINS_HOME}/configuration_old
@@ -53,6 +56,9 @@ if [[ ! -z ${FILES+x} ]]; then
     sed -i "s/<AZURE_SP_TENANT_ID>/${AZURE_SERVICE_PRINCIPAL_TENANT_ID}/" ${JENKINS_HOME}/configuration/jenkins.yml
     sed -i "s/<AZURE_SP_SECRET>/${AZURE_SERVICE_PRINCIPAL_SECRET}/" ${JENKINS_HOME}/configuration/jenkins.yml
     find ${JENKINS_HOME}/configuration/jobs -type f -name "*.yml" -exec sed -i "s/<JENKINS_REMOTE_TRIGGER_TOKEN>/${JENKINS_REMOTE_TRIGGER_TOKEN}/" {} +
+
+    # Add latest commit to welcome message
+    sed -i "s/<GIT_COMMIT>/${REMOTE}/" ${JENKINS_HOME}/configuration/jenkins.yml
 
     # Schedule rolling restart
     kubectl rollout restart deployment/jenkins-master
