@@ -4,40 +4,43 @@ set -e
 set +x
 
 JENKINS_HOME=<JENKINS_HOME>
-BRANCH="jenkins-test"
+BRANCH="master"
 # List of secrets created by Kubernetes
 CONFIGSECRETS="passwords jenkinssp cloudconfig jenkinsconfig"
 
 # Create test-infra repo if it does not exist
 if [[ ! -d ${JENKINS_HOME}/test-infra ]]; then
-    cd ${JENKINS_HOME}
     git clone \
-        --depth 1 \
+        --depth 2 \
         --filter=blob:none \
         --no-checkout \
         --single-branch \
         --branch ${BRANCH} \
-        https://github.com/cyandevs/test-infra
-    cd ${JENKINS_HOME}/test-infra
-    git checkout ${BRANCH} -- config/jenkins
+        https://github.com/openenclave/test-infra \
+        ${JENKINS_HOME}/test-infra
+    git -C ${JENKINS_HOME}/test-infra/ checkout ${BRANCH} -- config/jenkins
     exit 0
 fi
 
-# Pull latest changes
-cd ${JENKINS_HOME}/test-infra
-git fetch
-
 # Determine if changes occurred
-LOCAL=$(git rev-parse ${BRANCH})
-REMOTE=$(git rev-parse origin/${BRANCH})
+LOCAL=$(git -C ${JENKINS_HOME}/test-infra rev-parse ${BRANCH})
+REMOTE=$(git -C ${JENKINS_HOME}/test-infra rev-parse origin/${BRANCH})
 
-if git diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
-    git pull
+if [[ "${LOCAL}" != "${REMOTE}" ]] && \
+git -C ${JENKINS_HOME}/test-infra/ diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
+
+    # Backup configuration
     if [[ -d ${JENKINS_HOME}/configuration_old ]]; then
         rm -rf ${JENKINS_HOME}/configuration_old
     fi
-    mv ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration_old
-    cp --recursive config/jenkins/configuration ${JENKINS_HOME}/configuration
+    if [[ -d ${JENKINS_HOME}/configuration ]]; then
+        mv ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration_old
+    fi
+
+    # Add new configuration
+    git -C ${JENKINS_HOME}/test-infra/ fetch --depth=2 config/jenkins
+    git -C ${JENKINS_HOME}/test-infra/ pull --depth=2 config/jenkins
+    cp --recursive ${JENKINS_HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}/configuration
 
     # Apply secrets
     sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml

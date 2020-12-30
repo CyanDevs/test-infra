@@ -296,29 +296,12 @@ configure_jenkins () {
     fi
 
     # Copy in Jenkins configuration to Jenkins master
-    kubectl exec ${JENKINS_MASTER_POD} -- rm -rf ${JENKINS_HOME}/configuration
-    kubectl cp ${BASEDIR}/configuration-reload.sh ${JENKINS_MASTER_POD}:/var/jenkins_home/configuration-reload.sh
+    kubectl apply -f ${BASEDIR}/kubernetes/configuration-update.yml
+    kubectl exec ${JENKINS_MASTER_POD} -- rm -rf ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration-reload.sh
+    kubectl cp ${BASEDIR}/configuration-reload.sh ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration-reload.sh
     kubectl cp configuration ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration
     kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<JENKINS_HOME>@${JENKINS_HOME}@" ${JENKINS_HOME}/configuration-reload.sh
     kubectl exec ${JENKINS_MASTER_POD} -- chmod 755 ${JENKINS_HOME}/configuration-reload.sh
-    
-    # Apply first time configurations
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<AZURE_KEYVAULT_URL>@${AZURE_KEYVAULT_URL}@" ${JENKINS_HOME}/configuration/jenkins.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<DNS_LABAEL>/${DNS_LABEL}/" ${JENKINS_HOME}/configuration/jenkins.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_LOCATION>/${AZURE_LOCATION}/" ${JENKINS_HOME}/configuration/jenkins.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_RESOURCE_GROUP>/${AZURE_VM_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_LOCATION>/${AZURE_VM_LOCATION}/" ${JENKINS_HOME}/configuration/clouds.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_NAME>/${AZURE_VM_GALLERY_NAME}/" ${JENKINS_HOME}/configuration/clouds.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_RESOURCE_GROUP>/${AZURE_VM_GALLERY_RESOURCE_GROUP}/" ${JENKINS_HOME}/configuration/clouds.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s/<AZURE_VM_GALLERY_SUBSCRIPTION_ID>/${AZURE_VM_GALLERY_SUBSCRIPTION_ID}/" ${JENKINS_HOME}/configuration/clouds.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<JENKINSADMIN_PASSWORD>/'"${SECRET_JENKINSADMIN_PASSWORD}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<OEADMIN_PASSWORD>/'"${SECRET_OEADMIN_PASSWORD}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_CLIENT_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_CLIENT_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SUBSCRIPTION_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_SUBSCRIPTION_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_TENANT_ID>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_TENANT_ID}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'sed -i "s/<AZURE_SP_SECRET>/'"${SECRET_AZURE_SERVICE_PRINCIPAL_SECRET}"'/" ${JENKINS_HOME}/configuration/jenkins.yml'
-    kubectl exec ${JENKINS_MASTER_POD} -- sh -c 'find ${JENKINS_HOME}/configuration/jobs -type f -name "*.yml" -exec sed -i "s/<JENKINS_REMOTE_TRIGGER_TOKEN>/'"${SECRET_JENKINS_REMOTE_TRIGGER_TOKEN}"'/" {} +'
 }
 
 
