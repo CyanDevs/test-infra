@@ -3,20 +3,8 @@
 set -e
 set +x
 
-JENKINS_HOME=<JENKINS_HOME>
-BRANCH="master"
-
-clone_configs () {
-    git clone \
-        --depth 2 \
-        --filter=blob:none \
-        --no-checkout \
-        --single-branch \
-        --branch ${BRANCH} \
-        https://github.com/openenclave/test-infra \
-        ${JENKINS_HOME}/test-infra
-    git -C ${JENKINS_HOME}/test-infra/ checkout ${BRANCH} -- config/jenkins
-}
+readonly JENKINS_HOME=/var/jenkins_home
+readonly BRANCH=master
 
 apply_secrets () {
 
@@ -25,11 +13,12 @@ apply_secrets () {
         rm -rf ${JENKINS_HOME}/configuration_old
     fi
     if [[ -d ${JENKINS_HOME}/configuration ]]; then
-        mv ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration_old
+        cp --recursive ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration_old
     fi
 
     # Copy over new configuration to Jenkins
-    cp --recursive ${JENKINS_HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}/configuration
+    rm -rf ${JENKINS_HOME}/configuration/*
+    cp --recursive ${HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}/configuration
 
     # Overwrite variables with secrets
     sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml
@@ -52,11 +41,11 @@ apply_secrets () {
     find ${JENKINS_HOME}/configuration/jobs -type f -name "*.yml" -exec sed -i "s/<JENKINS_REMOTE_TRIGGER_TOKEN>/${JENKINS_REMOTE_TRIGGER_TOKEN}/" {} +
 
     # Add latest commit to welcome message
-    COMMIT=$(git -C ${JENKINS_HOME}/test-infra rev-parse ${BRANCH})
+    local COMMIT=$(git -C ${HOME}/test-infra rev-parse ${BRANCH})
     sed -i "s/<GIT_COMMIT>/${COMMIT}/" ${JENKINS_HOME}/configuration/jenkins.yml
 
     # Schedule rolling restart
-    kubectl rollout restart deployment/jenkins-master
+    # kubectl rollout restart deployment/jenkins-master
 
 }
 
@@ -64,7 +53,7 @@ remove_locks () {
 
     # Remove git locks if exists
     # this occurs due to git operations that are unusually slow in previous runs that were killed by the job timeout
-    LOCK_FILES=(
+    local LOCK_FILES=(
         .git/index.lock
         .git/shallow.lock
         .git/logs/HEAD.lock
@@ -78,18 +67,10 @@ remove_locks () {
 
 }
 
-# Create test-infra repo if it does not exist
-if [[ ! -d ${JENKINS_HOME}/test-infra ]]; then
-    echo "No git repository detected. Cloning new and applying configurations..."
-    clone_configs
-    apply_secrets
-    exit 0
-fi
-
 # Determine current commit
 if [[ -f ${JENKINS_HOME}/configuration/jenkins.yml ]]; then
-    LOCAL=$(grep "Jenkins Master is currently on commit:" /var/jenkins_home/configuration/jenkins.yml | cut -d ':' -f 2 | sed 's/ //g')
-    # Catch edge case where if commit is somehow unset, make sure all variables and secrets are applied
+    readonly LOCAL=$(grep "Jenkins Master is currently on commit:" /var/jenkins_home/configuration/jenkins.yml | cut -d ':' -f 2 | sed 's/ //g')
+    # Catch case where configuration is new/unset. Make sure all variables and secrets are applied
     if [[ ${LOCAL} == "<GIT_COMMIT>" ]]; then
         apply_secrets
         exit 0
@@ -98,19 +79,14 @@ fi
 
 # Determine if there are new commits on master
 remove_locks
-git -C ${JENKINS_HOME}/test-infra/ fetch --depth=1
-REMOTE=$(git -C ${JENKINS_HOME}/test-infra rev-parse origin/${BRANCH})
+readonly REMOTE=$(git -C ${HOME}/test-infra rev-parse origin/${BRANCH})
 
 # If a new commit is available and whether changes are made to configuration files
 if [[ "${LOCAL}" != "${REMOTE}" ]]; then
     echo "Local:  ${LOCAL}"
     echo "Remote: ${REMOTE}"
-    if git -C ${JENKINS_HOME}/test-infra/ diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
+    if git -C ${HOME}/test-infra/ diff --name-only ${LOCAL} ${REMOTE} -- config/jenkins/configuration | grep "yml"; then
         echo "Updating configurations from commit ${LOCAL} to ${REMOTE}"
-        # Pull in new commits
-        git -C ${JENKINS_HOME}/test-infra/ clean -dfx
-        git -C ${JENKINS_HOME}/test-infra/ checkout -- config/jenkins
-        git -C ${JENKINS_HOME}/test-infra/ reset --hard origin/${BRANCH}
         apply_secrets
     else
         echo "No configuration files (.yml) were updated between the two commits"
