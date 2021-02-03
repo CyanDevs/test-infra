@@ -22,7 +22,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -50,6 +50,47 @@ jenkins:
         usageMode: "Only build jobs with label expressions matching this node"
         usePrivateIP: true
         virtualMachineSize: "Standard_DC2s_v2"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Ubuntu 16.04 LTS"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
+          galleryImageDefinition: "ubuntu-18.04"
+          galleryImageVersion: "2021.01.26"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        initScript: "gpasswd -a oeadmin docker \nchmod g+rw /var/run/docker.sock"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "NonSGX-Ubuntu-1804"
+        location: "UK South"
+        noOfParallelJobs: 4
+        osDiskSize: 256
+        osType: "Linux"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDisabled: false
+        templateName: "nonsgxubuntu1804"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_F8s_v2"
         virtualNetworkName: "jenkinsarm-vnet"
       - agentLaunchMethod: "SSH"
         builtInImage: "Ubuntu 16.04 LTS"
@@ -154,7 +195,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ws2016-SGX-DCAP"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -194,8 +235,49 @@ jenkins:
         executeInitScriptAsRoot: true
         existingStorageAccountName: ""
         imageReference:
-          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageDefinition: "ws2016-nonSGX"
           galleryImageVersion: "2020.12.03"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "ACC-Windows-2016"
+        location: "UK South"
+        noOfParallelJobs: 1
+        osDiskSize: 256
+        osType: "Windows"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDesc: "ACC-Windows-2016"
+        templateDisabled: false
+        templateName: "ws16nonsgx"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_D4s_v3"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Windows Server 2016"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
+          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -278,7 +360,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -328,7 +410,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -368,8 +450,49 @@ jenkins:
         executeInitScriptAsRoot: true
         existingStorageAccountName: ""
         imageReference:
+          galleryImageDefinition: "ubuntu-18.04"
+          galleryImageVersion: "2021.01.26"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        initScript: "gpasswd -a oeadmin docker \nchmod g+rw /var/run/docker.sock"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "NonSGX-Ubuntu-1804"
+        location: "East US"
+        noOfParallelJobs: 4
+        osDiskSize: 256
+        osType: "Linux"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDisabled: false
+        templateName: "nonsgxubuntu1804"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_F8s_v2"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Ubuntu 16.04 LTS"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
           galleryImageDefinition: "ubuntu-16.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -459,7 +582,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ws2016-SGX-DCAP"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -499,8 +622,49 @@ jenkins:
         executeInitScriptAsRoot: true
         existingStorageAccountName: ""
         imageReference:
-          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageDefinition: "ws2016-nonSGX"
           galleryImageVersion: "2020.12.03"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "ACC-Windows-2016"
+        location: "UK South"
+        noOfParallelJobs: 1
+        osDiskSize: 256
+        osType: "Windows"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDesc: "ACC-Windows-2016"
+        templateDisabled: false
+        templateName: "ws16nonsgx"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_D4s_v3"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Windows Server 2016"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
+          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -541,7 +705,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -591,7 +755,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -631,8 +795,49 @@ jenkins:
         executeInitScriptAsRoot: true
         existingStorageAccountName: ""
         imageReference:
+          galleryImageDefinition: "ubuntu-18.04"
+          galleryImageVersion: "2021.01.26"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        initScript: "gpasswd -a oeadmin docker \nchmod g+rw /var/run/docker.sock"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "NonSGX-Ubuntu-1804"
+        location: "West US 2"
+        noOfParallelJobs: 4
+        osDiskSize: 256
+        osType: "Linux"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDisabled: false
+        templateName: "nonsgxubuntu1804"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_F8s_v2"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Ubuntu 16.04 LTS"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
           galleryImageDefinition: "ubuntu-16.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -722,7 +927,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ws2016-SGX-DCAP"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -762,8 +967,49 @@ jenkins:
         executeInitScriptAsRoot: true
         existingStorageAccountName: ""
         imageReference:
-          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageDefinition: "ws2016-nonSGX"
           galleryImageVersion: "2020.12.03"
+          galleryName: "<AZURE_VM_GALLERY_NAME>"
+          galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
+          gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
+        imageTopLevelType: "advanced"
+        installDocker: false
+        installGit: false
+        installMaven: false
+        javaPath: "java"
+        labels: "ACC-Windows-2016"
+        location: "UK South"
+        noOfParallelJobs: 1
+        osDiskSize: 256
+        osType: "Windows"
+        preInstallSsh: true
+        retentionStrategy:
+          azureVMCloudRetentionStrategy:
+            idleTerminationMinutes: 60
+        shutdownOnIdle: false
+        storageAccountNameReferenceType: "new"
+        storageAccountType: "Standard_LRS"
+        subnetName: "jenkinsarm-snet"
+        templateDesc: "ACC-Windows-2016"
+        templateDisabled: false
+        templateName: "ws16nonsgx"
+        usageMode: "Only build jobs with label expressions matching this node"
+        usePrivateIP: true
+        virtualMachineSize: "Standard_D4s_v3"
+        virtualNetworkName: "jenkinsarm-vnet"
+      - agentLaunchMethod: "SSH"
+        builtInImage: "Windows Server 2016"
+        credentialsId: "JenkinsOEAdminAgents"
+        diskType: "managed"
+        doNotUseMachineIfInitFails: true
+        enableMSI: false
+        enableUAMI: false
+        ephemeralOSDisk: false
+        executeInitScriptAsRoot: true
+        existingStorageAccountName: ""
+        imageReference:
+          galleryImageDefinition: "ws2019-SGX-DCAP"
+          galleryImageVersion: "2021.01.27"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
@@ -804,7 +1050,7 @@ jenkins:
         existingStorageAccountName: ""
         imageReference:
           galleryImageDefinition: "ubuntu-18.04"
-          galleryImageVersion: "2020.12.03"
+          galleryImageVersion: "2021.01.26"
           galleryName: "<AZURE_VM_GALLERY_NAME>"
           galleryResourceGroup: "<AZURE_VM_GALLERY_RESOURCE_GROUP>"
           gallerySubscriptionId: "<AZURE_VM_GALLERY_SUBSCRIPTION_ID>"
