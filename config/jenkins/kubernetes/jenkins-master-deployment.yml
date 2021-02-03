@@ -19,34 +19,6 @@ spec:
   selector:
     app: jenkins-master
 ---
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: jenkins-master-volume
-provisioner: kubernetes.io/azure-file
-reclaimPolicy: Retain
-mountOptions:
-- dir_mode=0777
-- file_mode=0777
-- uid=1000
-- gid=1000
-- mfsymlinks
-- cache=strict
-parameters:
-  skuName: Standard_LRS
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: jenkins-master-volume
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: jenkins-master-volume
-  resources:
-    requests:
-      storage: 1000Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -61,19 +33,22 @@ spec:
         app: jenkins-master
     spec:
       containers:
-      - name: jenkins-master
+      - name: jenkins-mastens-plugin-clir
         image: jenkins/jenkins:2.263.3-lts
         imagePullPolicy: Always
         env:
         - name: JAVA_OPTS
-          value: -Djenkins.install.runSetupWizard=false
+          value: -Djenkins.install.runSetupWizard=false -Xmx2048M
         - name: CASC_JENKINS_CONFIG
           value: /var/jenkins_home/configuration/
         volumeMounts:
+        - name: plugins
+          mountPath: "/plugins"
+          readOnly: true
         - name: jenkins-home
-          mountPath: "/var/jenkins_home"
-        - name: jenkins-war
-          mountPath: "/var/jenkins_home/war"
+          mountPath: "/var/jenkins_home/"
+        - name: jenkins-master-configuration
+          mountPath: "/var/jenkins_home/configuration"
         livenessProbe:
           httpGet:
             path: /login
@@ -91,14 +66,31 @@ spec:
           periodSeconds: 30
         resources:
           requests:
-            cpu: "2"
+            cpu: "4"
             memory: 8Gi
           limits:
             cpu: "8"
             memory: 30Gi
+      initContainers:
+      - name: plugin-install
+        image: jenkins/jenkins:2.263.3-lts
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: plugins
+          mountPath: "plugins"
+          readOnly: true
+        - name: jenkins-home
+          mountPath: "/var/jenkins_home/"
+          command: ["/bin/jenkins-plugin-cli", "--plugin-file", "/plugins/plugins.txt", "--plugin-download-directory", "/var/jenkins_home/plugins"]
       volumes:
+      - name: plugins
+        configMap:
+          name: plugins
+          items:
+            - key: "plugins.txt"
+              path: "plugins.txt"
       - name: jenkins-home
+        emptyDir: {}
+      - name: jenkins-master-configuration
         persistentVolumeClaim:
-          claimName: jenkins-master-volume
-      - name: jenkins-war
-+       emptyDir: {}
+          claimName: jenkins-master-configuration

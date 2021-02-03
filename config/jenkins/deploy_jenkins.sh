@@ -239,6 +239,23 @@ deploy_jenkins_ingress () {
     sed -i "s/${AZURE_LOCATION}/<AZURE_LOCATION>/" ${BASEDIR}/kubernetes/jenkins-ingress.yml
 }
 
+configure_jenkins () {
+
+    # Copy in Jenkins configuration to Jenkins master
+    kubectl apply -f ${BASEDIR}/kubernetes/configuration-update.yml
+
+    # Trigger initial configuration
+    kubectl create job --from=cronjob/configuration-update initial-configuration
+    kubectl wait --for=condition=completed job/initial-configuration --timeout=10m
+}
+
+update_plugins_list () {
+    
+    if kubectl get configmap plugins; then
+        kubectl delete configmap plugins
+    fi
+    kubectl create configmap plugins --from-file=${BASEDIR}/plugins.txt
+}
 
 deploy_jenkins () {
 
@@ -282,6 +299,12 @@ deploy_jenkins () {
         --from-literal=keyvaulturl="${AZURE_KEYVAULT_URL}" \
         --from-literal=location="${AZURE_LOCATION}"
 
+    # Add in Jenkins configuration
+    configure_jenkins
+
+    # Add in Plugins list
+    update_plugins_list
+
     # Deploy jenkins-master
     kubectl apply -f ${BASEDIR}/kubernetes/jenkins-master-deployment.yml
     sleep 3
@@ -295,46 +318,6 @@ deploy_jenkins () {
 
     # Apply workaround for https://github.com/jenkinsci/docker/issues/399
     kubectl exec ${JENKINS_MASTER_POD} -- ln -fs /dev/null ${JENKINS_HOME}/.owners
-}
-
-
-configure_jenkins () {
-
-    if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
-        readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
-    fi
-
-    # Copy in Jenkins configuration to Jenkins master
-    kubectl apply -f ${BASEDIR}/kubernetes/configuration-update.yml
-    kubectl exec ${JENKINS_MASTER_POD} -- rm -rf ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration-reload.sh
-    kubectl cp ${BASEDIR}/configuration-reload.sh ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration-reload.sh
-    kubectl cp configuration ${JENKINS_MASTER_POD}:${JENKINS_HOME}/configuration
-    kubectl exec ${JENKINS_MASTER_POD} -- sed -i "s@<JENKINS_HOME>@${JENKINS_HOME}@" ${JENKINS_HOME}/configuration-reload.sh
-    kubectl exec ${JENKINS_MASTER_POD} -- chmod 755 ${JENKINS_HOME}/configuration-reload.sh
-
-    # Trigger initial configuration
-    kubectl create job --from=cronjob/configuration-update initial-configuration
-}
-
-
-install_jenkins_plugins () {
-
-    if [[ -z ${JENKINS_MASTER_POD+x} ]]; then
-        readonly JENKINS_MASTER_POD=$(kubectl get pods --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' | grep jenkins-master | head -n 1)
-    fi
-
-    # Copy plugins list and install
-    kubectl cp plugins.txt ${JENKINS_MASTER_POD}:${JENKINS_HOME}
-    kubectl exec ${JENKINS_MASTER_POD} -- jenkins-plugin-cli --plugin-file ${JENKINS_HOME}/plugins.txt --plugin-download-directory ${JENKINS_HOME}/plugins/
-
-    read -p "Plugins installed. Do you want to automatically do a rolling restart of Jenkins to apply the changes? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # This creates a new pod and terminates the currently running pod, so plugins are reloaded.
-        echo "Waiting for first pod to be ready to avoid conflicts..."
-        kubectl wait --for=condition=ready pod -l app=jenkins-master --timeout=30m
-        kubectl rollout restart deployment/jenkins-master
-    fi
 }
 
 print_info () {
@@ -357,13 +340,13 @@ print_info () {
 
 while getopts ":pc" opt; do
     case ${opt} in
-        c ) echo "Skipping installation and updating jenkins-master configuration only..."
+        c ) echo "Updating Jenkins configuration..."
             configure_jenkins
             echo "Configuration completed. Please reload Jenkins through Manage Jenkins > Configuration as Code"
             exit 0
             ;;
-        p ) echo "Installing Jenkins plugins..."
-            install_jenkins_plugins
+        p ) echo "Updating Jenkins plugins from plugins.txt..."
+            update_plugins_list
             exit 0
             ;;
         * ) echo "Usage: deploy_jenkins.sh [-c] [-p]
