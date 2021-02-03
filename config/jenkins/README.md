@@ -5,8 +5,8 @@ Below are the notable service providers and last known working version.
 
 | Service                  | Provider                              | Versions       |
 | ------------------------ | ------------------------------------- | -------------- |
-| Jenkins                  | Jenkins CI                            | LTS            |
-| Infrastructure           | Kubernetes & Azure Kubernetes Service | 1.18.8         |
+| Jenkins                  | Jenkins CI                            | 2.263.3        |
+| Infrastructure           | Kubernetes & Azure Kubernetes Service | 1.19.3         |
 | Storage                  | Azure Persistent File Shares          | N/A            |
 | Ingress                  | F5 Nginx Ingress Controller           | v0.41.2        |
 | SSL Certificate Manager  | Jetstack Cert Manager                 | 1.1.0          |
@@ -75,30 +75,32 @@ If you are not using private IPs, ensure that in configuration/clouds.yml `usePr
 # Upgrades and Maintenance
 
 ## Updating Jenkins Plugins
-* It is recommended to update the plugins through the Jenkins UI
-* Alternatively, you can update the plugins list in plugins.txt and run `./deploy_jenkins.sh -p`
+* For transient changes, it is recommended to update the plugins through the Jenkins UI. For any permanent you need to add it to the plugins list `plugins.txt`, and then run `./deploy_jenkins.sh -p` which will update the configmap `plugins`. For the new changes to take effect you will need to do a new rollout on Kubernetes to create new Jenkins masters for the changes to take effect. If you absolutely must use the same container then you can run `/bin/jenkins-plugin-cli --plugin-file /plugins/plugins.txt --plugin-download-directory /var/jenkins_home/plugins` inside the container.
 
 ## Updating Jenkins Configuration
 1. Update `configuration/jenkins.yml` or if you want to keep it separate from core configuration you can add a new YAML file in `configuration/`.
 2. Create a pull request into the master branch of openenclave/test-infra
-3. Once merged, Jenkins will automatically update, usually within 5-15 min. If it does not update within an extended period, there may be an error with the configuration.
+3. Once merged, you may trigger a configuration reload by going to Jenkins > Manage Jenkins > Configuration as Code > Reload
+4. If Jenkins cannot reload, there is likely an error with the configuration and the changes should be double checked and/or reverted.
 
 _For more information, see https://github.com/jenkinsci/configuration-as-code-plugin_ 
 
-### Creating new secrets or updating existing secrets
+### Creating new secrets
 Note: You will need access to the AKS cluster to do this.
 1. Ensure the new secrets or changes are appropriately added in deploy_jenkins.sh, configuration-update.sh, and kubernetes/configuration-update.yml 
 2. Commit your changes and open a pull request into the master branch of openenclave/test-infra
 3. Shortly before the pull request is merged, turn off configuration updates on Jenkins with `kubectl delete cronjob configuration-update`
-4. Once merged, you can patch existing Jenkins with your changes by creating the secret manually, apply the new Kubernetes manifest, and run `./deploy_jenkins.sh -c`.
-5. Reapply configuration updates with `kubectl apply -f kubernetes/configuration-update.yml`
-6. Wait for the configuration-update job to complete with `kubectl get pods -w`
-7. Reload Jenkins configuration in Manage Jenkins > Configuration as Code
+4. Once merged, you can patch existing Jenkins with your changes by:
+  1. Creating the secret manually
+  2. Apply the new Kubernetes manifest
+  3. Running `./deploy_jenkins.sh -c`
+5. Continue by following the section on "Updating Jenkins Configuration" above, starting from step where a pull request is merged.
 
 ### Change value of existing secrets
 Note: You will need access to the AKS cluster to do this.
-1. Manually update the secret in the AKS Cluster. The new secrets will be automatically used on the next configuration update run.
-2. Wait for a configuration update run (when new changes make its way to openenclave/test-infra master branch). There are no convenient options to force a run at this time.
+1. Manually update the secret in the AKS Cluster.
+2. Wait for a new configuration change to be checked in, or do a new rollout on Kubernetes to create new Jenkins masters.
+3. Continue by following the section on "Updating Jenkins Configuration" above, starting from step where a pull request is merged.
 
 ### Updating configuration-update.sh
 Note: You will need access to the AKS cluster to do this.
@@ -123,8 +125,7 @@ _For more information, see https://docs.microsoft.com/en-us/azure/aks/upgrade-cl
 
 ## Updating Jenkins Jobs
 1. Update the relevant job in `configuration/jobs/` or add your own job. The jobs shown in this directory uses the [job-dsl-plugin](https://plugins.jenkins.io/job-dsl/) which is usually made up of a combination of YAML, Groovy, Jenkins Pipeline syntax. For examples, see [the demos from Jenkins CasC](https://github.com/jenkinsci/configuration-as-code-plugin/tree/master/demos/jobs).
-2. Run `./deploy_jenkins.sh -c` to deploy the new configuration to the Jenkins master.
-3. Configuration changes can be picked up by restarting Jenkins (during a new Jenkins setup) or by running the 'Master/reload-configuration' job on Jenkins.
+2. Continue by following the section on "Updating Jenkins Configuration", starting from step on creating a pull request.
 
 _Job DSL API Reference: https://jenkinsci.github.io/job-dsl-plugin/_
 
@@ -143,11 +144,13 @@ This is usually due to a delay with the Service Principal being propogated out w
 
 ## SSL Certificates
 ### Certificate not issued or valid
-You may have a misconfigured resource or you have hit Let's Encrypt's 50 certificate weekly limit.
-* Ensure Jenkins ingress has the correct domain with `kubectl describe jenkins-ingress`
-* Ensure Cert Manager services are running with `kubectl get pods -n ingress`
-* Check for errors with `kubectl describe certificaterequests` and equivalent commands for the `orders` and `challenge` resources.
-* Check for errors with https://letsdebug.net/
+1. You can try to delete the certificate on the AKS Cluster, and let it be recreated: `kubectl delete certificate tls-secret`
+2. You may have a misconfigured resource or you have hit Let's Encrypt's 50 certificate weekly limit.
+  * Ensure Jenkins ingress has the correct domain with `kubectl describe jenkins-ingress`
+  * Ensure Cert Manager services are running with `kubectl get pods -n ingress`
+  * Check for errors with `kubectl describe certificaterequests` and equivalent commands for the `orders` and `challenge` resources.
+  * Check for errors with https://letsdebug.net/
+
 
 ## Jenkins
 ### Plugins not initialized or missing
