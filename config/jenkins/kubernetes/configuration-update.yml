@@ -1,4 +1,32 @@
 ---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-file-share
+provisioner: kubernetes.io/azure-file
+reclaimPolicy: Retain
+mountOptions:
+- dir_mode=0777
+- file_mode=0777
+- uid=1000
+- gid=1000
+- mfsymlinks
+- cache=strict
+parameters:
+  skuName: Standard_LRS
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-master-configuration
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: azure-file-share
+  resources:
+    requests:
+      storage: 5Gi
+---
 # Service account the client will use to reset the deployment,
 # by default the pods running inside the cluster can do no such things.
 kind: ServiceAccount
@@ -54,12 +82,20 @@ spec:
           containers:
             - name: kubectl
               image: dtzar/helm-kubectl
-              command:
-                - '/bin/bash'
-                - '/var/jenkins_home/configuration-reload.sh'
+              command: ['/bin/sh', '-c']
+              args:
+              - git clone https://github.com/cyandevs/test-infra ${HOME}/test-infra
+                  --depth 2
+                  --filter=blob:none
+                  --no-checkout
+                  --single-branch
+                  --branch horizontalscaling;
+                git -C ${HOME}/test-infra/ checkout horizontalscaling -- config/jenkins;
+                chmod +x ${HOME}/test-infra/config/jenkins/configuration-reload.sh;
+                ${HOME}/test-infra/config/jenkins/configuration-reload.sh;
               volumeMounts:
-              - name: volume
-                mountPath: "/var/jenkins_home"
+              - name: jenkins-master-configuration
+                mountPath: "/var/jenkins_home/configuration"
               env:
               - name: JENKINSADMIN_PASSWORD
                 valueFrom:
@@ -142,6 +178,6 @@ spec:
                     name: jenkinsconfig
                     key: location
           volumes:
-          - name: volume
+          - name: jenkins-master-configuration
             persistentVolumeClaim:
-              claimName: jenkins-master-volume
+              claimName: jenkins-master-configuration
