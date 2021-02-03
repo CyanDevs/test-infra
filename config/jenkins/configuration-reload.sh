@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
 
 set -e
-set +x
+set -x
 
 readonly JENKINS_HOME=/var/jenkins_home
-readonly BRANCH=master
+readonly BRANCH=horizontalscaling
 
 apply_secrets () {
 
     # Backup configuration to configuration_old directory
     if [[ -d ${JENKINS_HOME}/configuration_old ]]; then
-        rm -rf ${JENKINS_HOME}/configuration_old
+        rm -rf ${JENKINS_HOME}/configuration_old/*
     fi
     if [[ -d ${JENKINS_HOME}/configuration ]]; then
-        cp --recursive ${JENKINS_HOME}/configuration ${JENKINS_HOME}/configuration_old
+        mv ${JENKINS_HOME}/configuration/* ${JENKINS_HOME}/configuration_old/
     fi
 
     # Copy over new configuration to Jenkins
-    rm -rf ${JENKINS_HOME}/configuration/*
-    cp --recursive ${HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}/configuration
+    cp --recursive ${HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}
 
     # Overwrite variables with secrets
     sed -i "s/<JENKINSADMIN_EMAIL>/${JENKINSADMIN_EMAIL}/" ${JENKINS_HOME}/configuration/jenkins.yml
@@ -67,14 +66,15 @@ remove_locks () {
 
 }
 
-# Determine current commit
+# Determine current commit if exists
 if [[ -f ${JENKINS_HOME}/configuration/jenkins.yml ]]; then
-    readonly LOCAL=$(grep "Jenkins Master is currently on commit:" /var/jenkins_home/configuration/jenkins.yml | cut -d ':' -f 2 | sed 's/ //g')
-    # Catch case where configuration is new/unset. Make sure all variables and secrets are applied
-    if [[ ${LOCAL} == "<GIT_COMMIT>" ]]; then
-        apply_secrets
-        exit 0
-    fi
+    readonly LOCAL=$(grep -oE '[a-z0-9]{40}' ${JENKINS_HOME}/configuration/jenkins.yml)
+fi
+
+# Catch case where configuration is new/unset. Make sure all variables and secrets are applied
+if [[ -z ${LOCAL+x} ]]; then
+    apply_secrets
+    exit 0
 fi
 
 # Determine if there are new commits on master
