@@ -8,14 +8,7 @@ readonly BRANCH=horizontalscaling
 
 apply_secrets () {
 
-    # Backup configuration to configuration_old directory
-    if [[ -d ${JENKINS_HOME}/configuration_old ]]; then
-        rm -rf ${JENKINS_HOME}/configuration_old/*
-    fi
-    if [[ -d ${JENKINS_HOME}/configuration ]]; then
-        mv ${JENKINS_HOME}/configuration/* ${JENKINS_HOME}/configuration_old/
-    fi
-
+    rm -vrf ${JENKINS_HOME}/configuration/*
     # Copy over new configuration to Jenkins
     cp --recursive ${HOME}/test-infra/config/jenkins/configuration ${JENKINS_HOME}
 
