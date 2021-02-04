@@ -26,7 +26,6 @@ import requests
 import logging
 import atexit
 
-
 def binary_backoff(retries):
     """
     Increment by a multiplier based off of number of retries made
@@ -70,6 +69,7 @@ class Trigger:
         self.encoding = arguments['--encoding'][0]
         self.retries = int(arguments['--retries'][0])
         self.crumb = self.fetch_crumb()
+        self.token = self.fetch_token()
 
         if self.encoding.lower() in ["html", "text"]:
             self.encoding = self.encoding.title()
@@ -84,10 +84,14 @@ class Trigger:
         else:
             self.parameters = {}
 
-    def return_json(self, url):
+    def return_json(self, url, auth=None, data=None):
         """ Safely return json from a request """
 
-        response = self.http.get(url)
+        response = self.http.get(
+            url = url,
+            auth = auth,
+            data = data
+        )
         if self.debug:
             print(
                 f'GET Request {url}'
@@ -97,7 +101,7 @@ class Trigger:
             )
         # Catch 4xx and 5xx errors although 429, 500, 502, 503, 504 are already retried
         response.raise_for_status()
-    
+
         if response.json():
             return response.json()
         return None
@@ -106,10 +110,35 @@ class Trigger:
         """Obtains a user crumb from Jenkins API"""
 
         url = f'{self.url}/crumbIssuer/api/json'
+        auth = (self.user, self.password)
         print(f'Fetching: {url}')
-        crumb_json = self.return_json(url)
-        if crumb_json.get('crumb'):  
+
+        crumb_json = self.return_json(url, auth)
+        if crumb_json.get('crumb'):
             return crumb_json.get('crumb')
+
+    def fetch_token(self):
+        """ Generates an API token for use during this script """
+
+        print('Fetching API Token')
+        token_response = self.http.post(
+            url = f'{self.url}/me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken',
+            auth = (self.user, self.password),
+            headers = {"Jenkins-Crumb": self.crumb}
+        )
+        if token_response.status_code == 200 and token_response.json().get('data', None):
+            atexit.register(self.handler_revoke_token)
+            print('Received token successfully')
+            return {
+                'uuid': token_response.json().get('data').get('tokenUuid'),
+                'value': token_response.json().get('data').get('tokenValue')
+            }
+        else:
+            raise ValueError(
+                f"API Token generation failed!\n"
+                f"Response status: {token_response.status_code}\n"
+                f'Content: {token_response.content}'
+            )
 
     def trigger_build(self):
         """Trigger a build via Jenkins API"""
@@ -133,7 +162,7 @@ class Trigger:
         build_response = self.http.post(
             url = build_url,
             data = self.parameters,
-            auth = (self.user, self.password),
+            auth = (self.user, self.token['value']),
             headers = {"Jenkins-Crumb": self.crumb}
         )
 
@@ -159,6 +188,8 @@ class Trigger:
             fail_trigger("Bad request. Likely build trigger is missing parameters to build with")
         elif build_response.status_code == 401:
             fail_trigger("Invalid user/password provided")
+        elif build_response.status_code == 403:
+            fail_trigger("Missing permissions to trigger a build")
         elif build_response.status_code == 404:
             fail_trigger("This job does not exist. Please check your job name and url")
         elif build_response.status_code == 409:
@@ -168,7 +199,7 @@ class Trigger:
 
     def waiting_for_job_to_start(self, queue_url):
         """Query if a Jenkins job starts building"""
-      
+
         # Increase number of retries by 5 to ensure enough time is spent waiting in queue
         max_retries = self.retries + 5
         for retry in range(max_retries):
@@ -181,12 +212,13 @@ class Trigger:
                 job_url = queue_json.get("executable").get("url")
                 print(f'Job is executing: {job_url}')
                 return job_url
-            
+
             elif queue_json.get('why'):
                 print(f"Job is in queue because: {queue_json.get('why')}")
-            
+
             elif queue_json.get('cancelled'):
                 print(f"Job is cancelled. Exiting...")
+                atexit.unregister(self.handler_abort_job)
                 exit(1)
 
             elif self.debug:
@@ -256,7 +288,7 @@ class Trigger:
             console_response = self.http.post(
                 url = console_url,
                 data = {'start': start_at},
-                auth = (self.user, self.password)
+                auth = (self.user, self.token['value'])
             )
             content_length = int(console_response.headers.get("Content-Length", 0))
 
@@ -275,7 +307,7 @@ class Trigger:
                     sleep(10)
                 else:
                     self.complete_job(self.check_job_status(job_url))
-            
+
             # Case on handling no output or content-length returned nothing
             else:
                 if self.debug:
@@ -292,8 +324,8 @@ class Trigger:
                 if no_progress_counter > 7:
                     status = self.check_job_status(job_url)
                     if status != 'running':
-                        self.complete_job(status)      
-                        stream_open = False           
+                        self.complete_job(status)
+                        stream_open = False
 
                 sleep(binary_backoff(no_progress_counter))
                 no_progress_counter += 1
@@ -310,14 +342,14 @@ class Trigger:
             if '/job/' in url:
                 stop_url = f"{url}stop"
             elif '/queue/' in url:
-                queue_item_search = search("\/queue\/item/(\d+)\/", url)
+                queue_item_search = search(r"\/queue\/item/(\d+)\/", url)
                 stop_url = f"{self.url}/queue/cancelItem?id={queue_item_search.group(1)}"
 
             print(f"Exiting script and aborting Jenkins job: {stop_url} (Try #{retry+1}/{self.retries})")
 
             stop_response = self.http.post(
                 url = stop_url,
-                auth = (self.user, self.password),
+                auth = (self.user, self.token['value']),
                 headers = {"Jenkins-Crumb": self.crumb}
             )
 
@@ -340,6 +372,23 @@ class Trigger:
                         print("Job is already building. Killing build instead.")
                         self.handler_abort_job(job_url)
 
+    def handler_revoke_token(self):
+        """ Revokes the API token generated in the same session """
+
+        print(f'Revoking API token')
+        token_response = self.http.post(
+            url = f'{self.url}/me/descriptorByName/jenkins.security.ApiTokenProperty/revoke',
+            data = {"tokenUuid": self.token['uuid']},
+            auth = (self.user, self.token['value']),
+            headers = {"Jenkins-Crumb": self.crumb}
+        )
+        if token_response.status_code != 200:
+            raise ValueError(
+                f"API Token was not revoked!\n"
+                f"Response status: {token_response.status_code}\n"
+                f'Content: {token_response.content}'
+            )
+
     def main(self):
 
         # Enable logging
@@ -347,7 +396,7 @@ class Trigger:
             logging.basicConfig(level=logging.DEBUG)
         else:
             logging.basicConfig(level=logging.WARN)
-        
+
         queue_url = self.trigger_build()
         job_url = self.waiting_for_job_to_start(queue_url)
         self.console_output(job_url)
